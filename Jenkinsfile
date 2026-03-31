@@ -69,8 +69,32 @@ pipeline {
             }
         }
 
+        stage('Validate Terraform') {
+            steps { 
+                // terraform validate does NOT need credentials
+                {
+                    sh '''
+
+                    terraform validate
+                    '''
+                }
+            }
+        }
+
+            stage('Format Terraform') {
+                steps {
+                    // terraform fmt does NOT need credentials
+                    {
+                        sh '''
+
+                        terraform fmt
+                        '''
+                }
+            }
+        }
         stage('Plan Terraform') {
             steps {
+                input message: "Approve Terraform Apply?", ok: "Deploy"
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
@@ -93,6 +117,29 @@ pipeline {
 
                     terraform apply -auto-approve tfplan
                     '''
+                }
+            }
+        }
+
+        stage('Optional Destroy') {
+            steps {
+                script {
+                    def destroyChoice = input(
+                        message: 'Do you want to run terraform destroy?',
+                        ok: 'Submit',
+                        parameters: [
+                            choice(
+                                name: 'DESTROY',
+                                choices: ['no', 'yes'],
+                                description: 'Select yes to destroy resources'
+                            )
+                        ]
+                    )
+                    if (destroyChoice == 'yes') {
+                        sh 'terraform destroy -auto-approve'
+                    } else {
+                        echo "Skipping destroy"
+                    }
                 }
             }
         }
