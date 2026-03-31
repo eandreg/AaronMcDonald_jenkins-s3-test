@@ -22,7 +22,7 @@ pipeline {
         }
         stage('Checkout Code') {
             steps {
-                git branch: 'main', url: 'https://github.com/eandreg/AaronMcDonald_jenkins-s3-test' 
+                checkout scm 
             }
         }
 
@@ -62,8 +62,7 @@ pipeline {
                     credentialsId: 'jenkinsTest'
                 ]]) {
                     sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
                     terraform init
                     '''
                 }
@@ -77,8 +76,7 @@ pipeline {
                     credentialsId: 'jenkinsTest'
                 ]]) {
                     sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
                     terraform plan -out=tfplan
                     '''
                 }
@@ -92,8 +90,7 @@ pipeline {
                     credentialsId: 'jenkinsTest'
                 ]]) {
                     sh '''
-                    export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-                    export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
+
                     terraform apply -auto-approve tfplan
                     '''
                 }
