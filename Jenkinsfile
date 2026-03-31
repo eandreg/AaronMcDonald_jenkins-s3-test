@@ -72,29 +72,24 @@ pipeline {
         stage('Validate Terraform') {
             steps { 
                 // terraform validate does NOT need credentials
-                {
                     sh '''
 
                     terraform validate
                     '''
-                }
             }
         }
 
             stage('Format Terraform') {
                 steps {
                     // terraform fmt does NOT need credentials
-                    {
                         sh '''
 
                         terraform fmt
                         '''
-                }
             }
         }
         stage('Plan Terraform') {
             steps {
-                input message: "Approve Terraform Apply?", ok: "Deploy"
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
@@ -136,7 +131,10 @@ pipeline {
                         ]
                     )
                     if (destroyChoice == 'yes') {
+                    // Credentials are required to authenticate with AWS for resource removal
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                         sh 'terraform destroy -auto-approve'
+                        }
                     } else {
                         echo "Skipping destroy"
                     }
