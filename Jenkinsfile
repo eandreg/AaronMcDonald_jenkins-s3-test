@@ -171,40 +171,20 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh '''
-                    docker run --rm \
-                      -v $(pwd):/workspace \
-                      -w /workspace \
-                      -e AWS_ACCESS_KEY_ID \
-                      -e AWS_SECRET_ACCESS_KEY \
-                      -e AWS_SESSION_TOKEN \
-                      -e AWS_REGION \
-                      hashicorp/terraform:latest terraform init
-                    '''
+                    sh 'terraform init'
                 }
             }
         }
 
         stage('Validate Terraform') {
             steps {
-                sh '''
-                docker run --rm \
-                  -v $(pwd):/workspace \
-                  -w /workspace \
-                  -e AWS_REGION \
-                  hashicorp/terraform:latest terraform validate
-                '''
+                sh 'terraform validate'
             }
         }
 
         stage('Format Terraform') {
             steps {
-                sh '''
-                docker run --rm \
-                  -v $(pwd):/workspace \
-                  -w /workspace \
-                  hashicorp/terraform:latest terraform fmt
-                '''
+                sh 'terraform fmt'
             }
         }
 
@@ -214,16 +194,7 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh '''
-                    docker run --rm \
-                      -v $(pwd):/workspace \
-                      -w /workspace \
-                      -e AWS_ACCESS_KEY_ID \
-                      -e AWS_SECRET_ACCESS_KEY \
-                      -e AWS_SESSION_TOKEN \
-                      -e AWS_REGION \
-                      hashicorp/terraform:latest terraform plan -out=tfplan
-                    '''
+                    sh 'terraform plan -out=tfplan'
                 }
             }
         }
@@ -235,16 +206,7 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh '''
-                    docker run --rm \
-                      -v $(pwd):/workspace \
-                      -w /workspace \
-                      -e AWS_ACCESS_KEY_ID \
-                      -e AWS_SECRET_ACCESS_KEY \
-                      -e AWS_SESSION_TOKEN \
-                      -e AWS_REGION \
-                      hashicorp/terraform:latest terraform apply -auto-approve tfplan
-                    '''
+                    sh 'terraform apply -auto-approve tfplan'
                 }
             }
         }
@@ -256,25 +218,12 @@ pipeline {
                         message: 'Do you want to run terraform destroy?',
                         ok: 'Submit',
                         parameters: [
-                            choice(
-                                name: 'DESTROY',
-                                choices: ['no', 'yes'],
-                                description: 'Select yes to destroy resources'
-                            )
+                            choice(name: 'DESTROY', choices: ['no', 'yes'], description: 'Select yes to destroy resources')
                         ]
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh '''
-                            docker run --rm \
-                              -v $(pwd):/workspace \
-                              -w /workspace \
-                              -e AWS_ACCESS_KEY_ID \
-                              -e AWS_SECRET_ACCESS_KEY \
-                              -e AWS_SESSION_TOKEN \
-                              -e AWS_REGION \
-                              hashicorp/terraform:latest terraform destroy -auto-approve
-                            '''
+                            sh 'terraform destroy -auto-approve'
                         }
                     } else {
                         echo "Skipping destroy"
@@ -285,11 +234,7 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Terraform deployment completed successfully!'
-        }
-        failure {
-            echo 'Terraform deployment failed!'
-        }
+        success { echo 'Terraform deployment completed successfully!' }
+        failure { echo 'Terraform deployment failed!' }
     }
 }
