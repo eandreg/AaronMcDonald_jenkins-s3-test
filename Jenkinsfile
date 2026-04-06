@@ -171,20 +171,40 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh 'terraform init'
+                    sh '''
+                    docker run --rm \
+                      -v $(pwd):/workspace \
+                      -w /workspace \
+                      -e AWS_ACCESS_KEY_ID \
+                      -e AWS_SECRET_ACCESS_KEY \
+                      -e AWS_SESSION_TOKEN \
+                      -e AWS_REGION \
+                      hashicorp/terraform:latest terraform init
+                    '''
                 }
             }
         }
 
         stage('Validate Terraform') {
             steps {
-                sh 'terraform validate'
+                sh '''
+                docker run --rm \
+                  -v $(pwd):/workspace \
+                  -w /workspace \
+                  -e AWS_REGION \
+                  hashicorp/terraform:latest terraform validate
+                '''
             }
         }
 
         stage('Format Terraform') {
             steps {
-                sh 'terraform fmt'
+                sh '''
+                docker run --rm \
+                  -v $(pwd):/workspace \
+                  -w /workspace \
+                  hashicorp/terraform:latest terraform fmt
+                '''
             }
         }
 
@@ -194,7 +214,16 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh 'terraform plan -out=tfplan'
+                    sh '''
+                    docker run --rm \
+                      -v $(pwd):/workspace \
+                      -w /workspace \
+                      -e AWS_ACCESS_KEY_ID \
+                      -e AWS_SECRET_ACCESS_KEY \
+                      -e AWS_SESSION_TOKEN \
+                      -e AWS_REGION \
+                      hashicorp/terraform:latest terraform plan -out=tfplan
+                    '''
                 }
             }
         }
@@ -206,7 +235,16 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh 'terraform apply -auto-approve tfplan'
+                    sh '''
+                    docker run --rm \
+                      -v $(pwd):/workspace \
+                      -w /workspace \
+                      -e AWS_ACCESS_KEY_ID \
+                      -e AWS_SECRET_ACCESS_KEY \
+                      -e AWS_SESSION_TOKEN \
+                      -e AWS_REGION \
+                      hashicorp/terraform:latest terraform apply -auto-approve tfplan
+                    '''
                 }
             }
         }
@@ -227,7 +265,16 @@ pipeline {
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
+                            sh '''
+                            docker run --rm \
+                              -v $(pwd):/workspace \
+                              -w /workspace \
+                              -e AWS_ACCESS_KEY_ID \
+                              -e AWS_SECRET_ACCESS_KEY \
+                              -e AWS_SESSION_TOKEN \
+                              -e AWS_REGION \
+                              hashicorp/terraform:latest terraform destroy -auto-approve
+                            '''
                         }
                     } else {
                         echo "Skipping destroy"
