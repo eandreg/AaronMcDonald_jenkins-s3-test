@@ -167,34 +167,54 @@ pipeline {
 
         stage('Initialize Terraform') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh 'terraform init'
+                script {
+                    def tfHome = tool 'terraform-latest'
+                    withEnv(["PATH+TF=${tfHome}"]) {
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'jenkinsTest'
+                        ]]) {
+                            sh 'terraform init'
+                        }
+                    }
                 }
             }
         }
 
         stage('Validate Terraform') {
             steps {
-                sh 'terraform validate'
+                script {
+                    def tfHome = tool 'terraform-latest'
+                    withEnv(["PATH+TF=${tfHome}"]) {
+                        sh 'terraform validate'
+                    }
+                }
             }
         }
 
         stage('Format Terraform') {
             steps {
-                sh 'terraform fmt'
+                script {
+                    def tfHome = tool 'terraform-latest'
+                    withEnv(["PATH+TF=${tfHome}"]) {
+                        sh 'terraform fmt'
+                    }
+                }
             }
         }
 
         stage('Plan Terraform') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh 'terraform plan -out=tfplan'
+                script {
+                    def tfHome = tool 'terraform-latest'
+                    withEnv(["PATH+TF=${tfHome}"]) {
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'jenkinsTest'
+                        ]]) {
+                            sh 'terraform plan -out=tfplan'
+                        }
+                    }
                 }
             }
         }
@@ -202,11 +222,16 @@ pipeline {
         stage('Apply Terraform') {
             steps {
                 input message: "Approve Terraform Apply?", ok: "Deploy"
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh 'terraform apply -auto-approve tfplan'
+                script {
+                    def tfHome = tool 'terraform-latest'
+                    withEnv(["PATH+TF=${tfHome}"]) {
+                        withCredentials([[
+                            $class: 'AmazonWebServicesCredentialsBinding',
+                            credentialsId: 'jenkinsTest'
+                        ]]) {
+                            sh 'terraform apply -auto-approve tfplan'
+                        }
+                    }
                 }
             }
         }
@@ -214,6 +239,7 @@ pipeline {
         stage('Optional Destroy') {
             steps {
                 script {
+                    def tfHome = tool 'terraform-latest'
                     def destroyChoice = input(
                         message: 'Do you want to run terraform destroy?',
                         ok: 'Submit',
@@ -222,8 +248,10 @@ pipeline {
                         ]
                     )
                     if (destroyChoice == 'yes') {
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
+                        withEnv(["PATH+TF=${tfHome}"]) {
+                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
+                                sh 'terraform destroy -auto-approve'
+                            }
                         }
                     } else {
                         echo "Skipping destroy"
