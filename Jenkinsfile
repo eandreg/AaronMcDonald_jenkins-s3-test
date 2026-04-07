@@ -1,10 +1,8 @@
 pipeline {
     agent any
-   
     environment {
         AWS_DEFAULT_REGION = 'us-east-1' 
     }
-
     stages {
         stage('Install & Setup Tools') {
             steps {
@@ -12,47 +10,39 @@ pipeline {
                     def tfHome = tool name: 'terraform-latest'
                     env.PATH = "${tfHome}:${env.PATH}"
                 }
-                
                 sh '''
                 if ! command -v aws &> /dev/null; then
-                    echo "AWS CLI not found. Downloading binary..."
-                    # CORRECTED URL BELOW
-                    curl "https://amazonaws.com" -o "awscliv2.zip"
+                    echo "AWS CLI not found. Downloading correct binary..."
+                    # CRITICAL FIX (Version 6): Full official AWS CLI v2 Linux x86_64 URL
+                    curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                    
                     unzip -q -o awscliv2.zip
-                    # This installs it locally into the workspace folder to avoid permission errors
-                    ./aws/install -i ./aws-cli -b ./aws-bin
-                    export PATH="$PATH:$(pwd)/aws-bin"
+                    
+                    # Install locally in workspace to bypass any permission issues
+                    ./aws/install -i $(pwd)/aws-cli -b $(pwd)/aws-bin --update
+                    
+                    echo "AWS CLI installed to $(pwd)/aws-bin"
                 else
-                    echo "AWS CLI already exists."
+                    echo "AWS CLI already exists on system."
                 fi
                 '''
-                
-                // Verify both work
                 sh 'terraform version'
-                sh './aws-bin/aws --version'
+                # Check if we use the local one we just built or the system one
+                sh 'if [ -f "./aws-bin/aws" ]; then ./aws-bin/aws --version; else aws --version; fi'
             }
         }
-
         stage('Checkout Code') {
             steps {
                 checkout scm
             }
         }
-
         stage('Terraform Operations') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest' 
-                ]]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                     sh '''
-                    # Point to the local AWS CLI we just installed
+                    # Ensure the path includes our local install
                     export PATH="$PATH:$(pwd)/aws-bin"
-                    
-                    echo "Verifying AWS Identity..."
                     aws sts get-caller-identity
-
-                    echo "Initializing Terraform..."
                     terraform init
                     terraform validate
                     terraform fmt
@@ -61,19 +51,14 @@ pipeline {
                 }
             }
         }
-
         stage('Approval') {
             steps {
                 input message: "Approve Terraform Apply?", ok: "Deploy"
             }
         }
-
         stage('Apply Terraform') {
             steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                     sh '''
                     export PATH="$PATH:$(pwd)/aws-bin"
                     terraform apply tfplan
@@ -81,7 +66,6 @@ pipeline {
                 }
             }
         }
-
         stage('Optional Destroy') {
             steps {
                 script {
@@ -91,247 +75,15 @@ pipeline {
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh '''
-                            export PATH="$PATH:$(pwd)/aws-bin"
-                            terraform destroy -auto-approve
-                            '''
+                            sh 'export PATH="$PATH:$(pwd)/aws-bin" && terraform destroy -auto-approve'
                         }
                     }
                 }
             }
         }
     }
-
-    post {
-        success { echo 'Terraform deployment completed successfully!' }
-        failure { echo 'Terraform deployment failed!' }
-    }
-}
-
-/*pipeline {
-    agent any
-   
-    environment {
-        AWS_REGION = 'us-east-1' 
-    }
-    stages {
-        
-        // AWS Credentials documentation: https://plugins.jenkins.io/aws-credentials/
-        stage('Set AWS Credentials') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest' //this needs to be changed to match the ID of your AWS credentials in Jenkins
-                ]]) {
-                    sh '''
-                    echo "AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID"
-                    aws sts get-caller-identity
-                    '''
-                }
-            }
-        }
-        stage('Checkout Code') {
-            steps {
-                checkout scm 
-            }
-        }
-  
-        stage('Initialize Terraform') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh '''
-
-                    terraform init
-                    '''
-                }
-            }
-        }
-
-        stage('Validate Terraform') {
-            steps { 
-                // terraform validate does NOT need credentials
-                    sh '''
-
-                    terraform validate
-                    '''
-            }
-        }
-
-            stage('Format Terraform') {
-                steps {
-                    // terraform fmt does NOT need credentials
-                        sh '''
-
-                        terraform fmt
-                        '''
-            }
-        }
-        stage('Plan Terraform') {
-            steps {
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh '''
-
-                    terraform plan -out=tfplan
-                    '''
-                }
-            }
-        }
-        stage('Apply Terraform') {
-            steps {
-                input message: "Approve Terraform Apply?", ok: "Deploy"
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'jenkinsTest'
-                ]]) {
-                    sh '''
-
-                    terraform apply -auto-approve tfplan
-                    '''
-                }
-            }
-        }
-
-        stage('Optional Destroy') {
-            steps {
-                script {
-                    def destroyChoice = input(
-                        message: 'Do you want to run terraform destroy?',
-                        ok: 'Submit',
-                        parameters: [
-                            choice(
-                                name: 'DESTROY',
-                                choices: ['no', 'yes'],
-                                description: 'Select yes to destroy resources'
-                            )
-                        ]
-                    )
-                    if (destroyChoice == 'yes') {
-                    // Credentials are required to authenticate with AWS for resource removal
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                        sh 'terraform destroy -auto-approve'
-                        }
-                    } else {
-                        echo "Skipping destroy"
-                    }
-                }
-            }
-        }
-    }
-    post {
-        success {
-            echo 'Terraform deployment completed successfully!'
-        }
-        failure {
-            echo 'Terraform deployment failed!'
-        }
-    }
-}*/
-
-/*pipeline {
-    agent any
-
-    environment {
-        AWS_REGION = 'us-east-1'
-        // This is the folder where you just unzipped the terraform file
-        TF_PATH = "/var/jenkins_home/workspace/jenkinsTest/Documents/TheoWAF"
-    }
-
-    stages {
-        stage('Checkout Code') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Initialize Terraform') {
-            steps {
-                script {
-                    withEnv(["PATH+TF=${TF_PATH}"]) {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'jenkinsTest'
-                        ]]) {
-                            sh 'terraform init'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Validate & Format') {
-            steps {
-                script {
-                    withEnv(["PATH+TF=${TF_PATH}"]) {
-                        sh 'terraform validate'
-                        sh 'terraform fmt'
-                    }
-                }
-            }
-        }
-
-        stage('Plan Terraform') {
-            steps {
-                script {
-                    withEnv(["PATH+TF=${TF_PATH}"]) {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'jenkinsTest'
-                        ]]) {
-                            sh 'terraform plan -out=tfplan'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Apply Terraform') {
-            steps {
-                input message: "Approve Terraform Apply?", ok: "Deploy"
-                script {
-                    withEnv(["PATH+TF=${TF_PATH}"]) {
-                        withCredentials([[
-                            $class: 'AmazonWebServicesCredentialsBinding',
-                            credentialsId: 'jenkinsTest'
-                        ]]) {
-                            sh 'terraform apply -auto-approve tfplan'
-                        }
-                    }
-                }
-            }
-        }
-
-        stage('Optional Destroy') {
-            steps {
-                script {
-                    def destroyChoice = input(
-                        message: 'Do you want to run terraform destroy?',
-                        ok: 'Submit',
-                        parameters: [
-                            choice(name: 'DESTROY', choices: ['no', 'yes'], description: 'Select yes to destroy resources')
-                        ]
-                    )
-                    if (destroyChoice == 'yes') {
-                        withEnv(["PATH+TF=${TF_PATH}"]) {
-                            withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                                sh 'terraform destroy -auto-approve'
-                            }
-                        }
-                    } else {
-                        echo "Skipping destroy"
-                    }
-                }
-            }
-        }
-    }
-
     post {
         success { echo 'Terraform deployment completed successfully!' }
         failure { echo 'Terraform deployment failed!' }
     }
-}*/
+}
