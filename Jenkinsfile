@@ -6,16 +6,36 @@ pipeline {
     }
 
     stages {
-        stage('Checkout & Setup') {
+        stage('Install & Setup Tools') {
             steps {
                 script {
-                    // This pulls the path from Global Tool Configuration
+                    // 1. Set up Terraform from your Global Tool Configuration
                     def tfHome = tool name: 'terraform-latest'
                     env.PATH = "${tfHome}:${env.PATH}"
                 }
-                checkout scm
+                
+                // 2. Automatically install AWS CLI if it is not on the agent
+                sh '''
+                if ! command -v aws &> /dev/null; then
+                    echo "AWS CLI not found. Installing..."
+                    apt-get update && apt-get install -y unzip curl
+                    curl "https://amazonaws.com" -o "awscliv2.zip"
+                    unzip -o awscliv2.zip
+                    ./aws/install
+                else
+                    echo "AWS CLI is already installed."
+                fi
+                '''
+                
+                // 3. Verify both are working
                 sh 'terraform version'
                 sh 'aws --version'
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                checkout scm
             }
         }
 
@@ -55,7 +75,6 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    // Using the plan file avoids the need for -auto-approve
                     sh 'terraform apply tfplan'
                 }
             }
