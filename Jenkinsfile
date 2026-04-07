@@ -1,4 +1,4 @@
-/*pipeline {
+pipeline {
     agent any
    
     environment {
@@ -150,8 +150,8 @@
             echo 'Terraform deployment failed!'
         }
     }
-}*/
-pipeline {
+}
+/*pipeline {
     agent any
 
     environment {
@@ -265,4 +265,4 @@ pipeline {
         success { echo 'Terraform deployment completed successfully!' }
         failure { echo 'Terraform deployment failed!' }
     }
-}
+}*/
