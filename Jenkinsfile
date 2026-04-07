@@ -156,6 +156,8 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
+        // This is the folder where you just unzipped the terraform file
+        TF_PATH = "/var/jenkins_home/workspace/jenkinsTest/Documents/TheoWAF"
     }
 
     stages {
@@ -168,8 +170,7 @@ pipeline {
         stage('Initialize Terraform') {
             steps {
                 script {
-                    def tfHome = tool 'terraform-latest'
-                    withEnv(["PATH+TF=${tfHome}"]) {
+                    withEnv(["PATH+TF=${TF_PATH}"]) {
                         withCredentials([[
                             $class: 'AmazonWebServicesCredentialsBinding',
                             credentialsId: 'jenkinsTest'
@@ -181,22 +182,11 @@ pipeline {
             }
         }
 
-        stage('Validate Terraform') {
+        stage('Validate & Format') {
             steps {
                 script {
-                    def tfHome = tool 'terraform-latest'
-                    withEnv(["PATH+TF=${tfHome}"]) {
+                    withEnv(["PATH+TF=${TF_PATH}"]) {
                         sh 'terraform validate'
-                    }
-                }
-            }
-        }
-
-        stage('Format Terraform') {
-            steps {
-                script {
-                    def tfHome = tool 'terraform-latest'
-                    withEnv(["PATH+TF=${tfHome}"]) {
                         sh 'terraform fmt'
                     }
                 }
@@ -206,8 +196,7 @@ pipeline {
         stage('Plan Terraform') {
             steps {
                 script {
-                    def tfHome = tool 'terraform-latest'
-                    withEnv(["PATH+TF=${tfHome}"]) {
+                    withEnv(["PATH+TF=${TF_PATH}"]) {
                         withCredentials([[
                             $class: 'AmazonWebServicesCredentialsBinding',
                             credentialsId: 'jenkinsTest'
@@ -223,8 +212,7 @@ pipeline {
             steps {
                 input message: "Approve Terraform Apply?", ok: "Deploy"
                 script {
-                    def tfHome = tool 'terraform-latest'
-                    withEnv(["PATH+TF=${tfHome}"]) {
+                    withEnv(["PATH+TF=${TF_PATH}"]) {
                         withCredentials([[
                             $class: 'AmazonWebServicesCredentialsBinding',
                             credentialsId: 'jenkinsTest'
@@ -239,7 +227,6 @@ pipeline {
         stage('Optional Destroy') {
             steps {
                 script {
-                    def tfHome = tool 'terraform-latest'
                     def destroyChoice = input(
                         message: 'Do you want to run terraform destroy?',
                         ok: 'Submit',
@@ -248,7 +235,7 @@ pipeline {
                         ]
                     )
                     if (destroyChoice == 'yes') {
-                        withEnv(["PATH+TF=${tfHome}"]) {
+                        withEnv(["PATH+TF=${TF_PATH}"]) {
                             withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                                 sh 'terraform destroy -auto-approve'
                             }
@@ -265,4 +252,8 @@ pipeline {
         success { echo 'Terraform deployment completed successfully!' }
         failure { echo 'Terraform deployment failed!' }
     }
+<<<<<<< HEAD
 }*/
+=======
+}*/
+>>>>>>> d9abfd9 (updated 04.06.26 v6)
