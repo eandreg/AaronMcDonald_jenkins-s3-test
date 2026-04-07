@@ -9,27 +9,29 @@ pipeline {
         stage('Install & Setup Tools') {
             steps {
                 script {
-                    // 1. Set up Terraform from your Global Tool Configuration
                     def tfHome = tool name: 'terraform-latest'
                     env.PATH = "${tfHome}:${env.PATH}"
                 }
                 
-                // 2. Automatically install AWS CLI if it is not on the agent
                 sh '''
                 if ! command -v aws &> /dev/null; then
-                    echo "AWS CLI not found. Installing..."
-                    apt-get update && apt-get install -y unzip curl
+                    echo "AWS CLI not found. Downloading portable version..."
+                    # Download the CLI zip
                     curl "https://amazonaws.com" -o "awscliv2.zip"
+                    # Unzip into the workspace (no root needed)
                     unzip -o awscliv2.zip
-                    ./aws/install
+                    # Add the new AWS folder to the PATH for this session
+                    export PATH="$PATH:$(pwd)/aws/dist"
+                    echo "AWS CLI ready at: $(pwd)/aws/dist/aws"
                 else
                     echo "AWS CLI is already installed."
                 fi
                 '''
                 
-                // 3. Verify both are working
+                // Verify tools work in this environment
                 sh 'terraform version'
-                sh 'aws --version'
+                // We add the path again here to ensure 'sh' sees it
+                sh 'PATH=$PATH:$(pwd)/aws/dist aws --version'
             }
         }
 
@@ -46,6 +48,9 @@ pipeline {
                     credentialsId: 'jenkinsTest' 
                 ]]) {
                     sh '''
+                    # Update PATH to find our portable AWS CLI
+                    export PATH="$PATH:$(pwd)/aws/dist"
+                    
                     echo "Verifying AWS Identity..."
                     aws sts get-caller-identity
 
@@ -75,7 +80,10 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    sh 'terraform apply tfplan'
+                    sh '''
+                    export PATH="$PATH:$(pwd)/aws/dist"
+                    terraform apply tfplan
+                    '''
                 }
             }
         }
@@ -89,7 +97,10 @@ pipeline {
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
+                            sh '''
+                            export PATH="$PATH:$(pwd)/aws/dist"
+                            terraform destroy -auto-approve
+                            '''
                         }
                     }
                 }
