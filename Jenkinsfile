@@ -15,23 +15,21 @@ pipeline {
                 
                 sh '''
                 if ! command -v aws &> /dev/null; then
-                    echo "AWS CLI not found. Downloading portable version..."
-                    # Download the CLI zip
+                    echo "AWS CLI not found. Downloading binary..."
+                    # CORRECTED URL BELOW
                     curl "https://amazonaws.com" -o "awscliv2.zip"
-                    # Unzip into the workspace (no root needed)
-                    unzip -o awscliv2.zip
-                    # Add the new AWS folder to the PATH for this session
-                    export PATH="$PATH:$(pwd)/aws/dist"
-                    echo "AWS CLI ready at: $(pwd)/aws/dist/aws"
+                    unzip -q -o awscliv2.zip
+                    # This installs it locally into the workspace folder to avoid permission errors
+                    ./aws/install -i ./aws-cli -b ./aws-bin
+                    export PATH="$PATH:$(pwd)/aws-bin"
                 else
-                    echo "AWS CLI is already installed."
+                    echo "AWS CLI already exists."
                 fi
                 '''
                 
-                // Verify tools work in this environment
+                // Verify both work
                 sh 'terraform version'
-                // We add the path again here to ensure 'sh' sees it
-                sh 'PATH=$PATH:$(pwd)/aws/dist aws --version'
+                sh './aws-bin/aws --version'
             }
         }
 
@@ -48,20 +46,16 @@ pipeline {
                     credentialsId: 'jenkinsTest' 
                 ]]) {
                     sh '''
-                    # Update PATH to find our portable AWS CLI
-                    export PATH="$PATH:$(pwd)/aws/dist"
+                    # Point to the local AWS CLI we just installed
+                    export PATH="$PATH:$(pwd)/aws-bin"
                     
                     echo "Verifying AWS Identity..."
                     aws sts get-caller-identity
 
                     echo "Initializing Terraform..."
                     terraform init
-
-                    echo "Validating and Formatting..."
                     terraform validate
                     terraform fmt
-
-                    echo "Generating Plan..."
                     terraform plan -out=tfplan
                     '''
                 }
@@ -81,7 +75,7 @@ pipeline {
                     credentialsId: 'jenkinsTest'
                 ]]) {
                     sh '''
-                    export PATH="$PATH:$(pwd)/aws/dist"
+                    export PATH="$PATH:$(pwd)/aws-bin"
                     terraform apply tfplan
                     '''
                 }
@@ -98,7 +92,7 @@ pipeline {
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                             sh '''
-                            export PATH="$PATH:$(pwd)/aws/dist"
+                            export PATH="$PATH:$(pwd)/aws-bin"
                             terraform destroy -auto-approve
                             '''
                         }
