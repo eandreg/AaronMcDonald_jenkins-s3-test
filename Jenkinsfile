@@ -2,6 +2,104 @@ pipeline {
     agent any
    
     environment {
+        // Renamed to AWS_DEFAULT_REGION so Terraform/AWS CLI detect it automatically
+        AWS_DEFAULT_REGION = 'us-east-1' 
+    }
+
+    stages {
+        stage('Checkout & Setup') {
+            steps {
+                checkout scm
+                // Standard check to ensure tools are available on the agent
+                sh 'terraform version'
+                sh 'aws --version'
+            }
+        }
+
+        stage('Terraform Operations') {
+            steps {
+                // Wrapping all AWS-dependent stages in one block to keep code DRY
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'jenkinsTest' 
+                ]]) {
+                    sh '''
+                    echo "Verifying AWS Identity..."
+                    aws sts get-caller-identity
+
+                    echo "Initializing Terraform..."
+                    terraform init
+
+                    echo "Validating and Formatting..."
+                    terraform validate
+                    terraform fmt
+
+                    echo "Generating Plan..."
+                    terraform plan -out=tfplan
+                    '''
+                }
+            }
+        }
+
+        stage('Approval') {
+            steps {
+                input message: "Approve Terraform Apply?", ok: "Deploy"
+            }
+        }
+
+        stage('Apply Terraform') {
+            steps {
+                withCredentials([[
+                    $class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'jenkinsTest'
+                ]]) {
+                    // Fixed: 'terraform apply' with a plan file does not use -auto-approve
+                    sh 'terraform apply tfplan'
+                }
+            }
+        }
+
+        stage('Optional Destroy') {
+            steps {
+                script {
+                    def destroyChoice = input(
+                        message: 'Do you want to run terraform destroy?',
+                        ok: 'Submit',
+                        parameters: [
+                            choice(
+                                name: 'DESTROY',
+                                choices: ['no', 'yes'],
+                                description: 'Select yes to destroy resources'
+                            )
+                        ]
+                    )
+                    if (destroyChoice == 'yes') {
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
+                            sh 'terraform destroy -auto-approve'
+                        }
+                    } else {
+                        echo "Skipping destroy"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Terraform deployment completed successfully!'
+            // Warning: Since you are using local state, do NOT use cleanWs() here 
+            // or you will lose your .tfstate file.
+        }
+        failure {
+            echo 'Terraform deployment failed!'
+        }
+    }
+}
+/*pipeline {
+    agent any
+   
+    environment {
         AWS_REGION = 'us-east-1' 
     }
     stages {
@@ -25,36 +123,7 @@ pipeline {
                 checkout scm 
             }
         }
-
-        // stage('Testing') {
-        //     // withEnv(["JFROG_BINARY_PATH=${tool 'jfrog-cli'}"]) {
-        //     // // The 'jf' tool is available in this scope.
-        //     // }
-        //     steps {
-        //         withCredentials([string(credentialsId: 'jfrog-creds', variable: 'JFROG_TOKEN')]) {
-        //             // Show the installed version of JFrog CLI
-        //             jf '-v'
-                    
-        //             // Show the configured JFrog Platform instances
-        //             jf 'c show'
-                    
-        //             // Ping Artifactory
-        //             jf 'rt ping'
-                    
-        //             // Create a file and upload it to the repository
-        //             sh 'touch test-file'
-        //             // Fixed upload command syntax
-        //             sh 'jf rt upload test-file tf-terraform/ --url=https://trial7zoppg.jfrog.io/artifactory/ --user=mcdonald.dm.aaron@gmail.com --password=$JFROG_TOKEN'
-                    
-        //             // Publish the build-info to Artifactory
-        //             jf 'rt bp'
-                    
-        //             // Fixed download command syntax
-        //             sh 'jf rt download tf-terraform/test-file --url=https://trial7zoppg.jfrog.io/artifactory/ --user=mcdonald.dm.aaron@gmail.com --password=$JFROG_TOKEN'
-        //         }
-        //     } 
-        // }
-    
+  
         stage('Initialize Terraform') {
             steps {
                 withCredentials([[
@@ -150,7 +219,7 @@ pipeline {
             echo 'Terraform deployment failed!'
         }
     }
-}
+}*/
 /*pipeline {
     agent any
 
