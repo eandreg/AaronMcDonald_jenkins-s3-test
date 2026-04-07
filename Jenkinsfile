@@ -96,6 +96,7 @@ pipeline {
         }
     }
 }
+
 /*pipeline {
     agent any
    
@@ -220,6 +221,7 @@ pipeline {
         }
     }
 }*/
+
 /*pipeline {
     agent any
 
@@ -321,8 +323,4 @@ pipeline {
         success { echo 'Terraform deployment completed successfully!' }
         failure { echo 'Terraform deployment failed!' }
     }
-<<<<<<< HEAD
 }*/
-=======
-}*/
->>>>>>> d9abfd9 (updated 04.06.26 v6)
