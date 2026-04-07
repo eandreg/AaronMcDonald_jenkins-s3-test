@@ -2,15 +2,18 @@ pipeline {
     agent any
    
     environment {
-        // Renamed to AWS_DEFAULT_REGION so Terraform/AWS CLI detect it automatically
         AWS_DEFAULT_REGION = 'us-east-1' 
     }
 
     stages {
         stage('Checkout & Setup') {
             steps {
+                script {
+                    // This pulls the path from Global Tool Configuration
+                    def tfHome = tool name: 'terraform-latest'
+                    env.PATH = "${tfHome}:${env.PATH}"
+                }
                 checkout scm
-                // Standard check to ensure tools are available on the agent
                 sh 'terraform version'
                 sh 'aws --version'
             }
@@ -18,7 +21,6 @@ pipeline {
 
         stage('Terraform Operations') {
             steps {
-                // Wrapping all AWS-dependent stages in one block to keep code DRY
                 withCredentials([[
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest' 
@@ -53,7 +55,7 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'jenkinsTest'
                 ]]) {
-                    // Fixed: 'terraform apply' with a plan file does not use -auto-approve
+                    // Using the plan file avoids the need for -auto-approve
                     sh 'terraform apply tfplan'
                 }
             }
@@ -64,21 +66,12 @@ pipeline {
                 script {
                     def destroyChoice = input(
                         message: 'Do you want to run terraform destroy?',
-                        ok: 'Submit',
-                        parameters: [
-                            choice(
-                                name: 'DESTROY',
-                                choices: ['no', 'yes'],
-                                description: 'Select yes to destroy resources'
-                            )
-                        ]
+                        parameters: [choice(name: 'DESTROY', choices: ['no', 'yes'])]
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                             sh 'terraform destroy -auto-approve'
                         }
-                    } else {
-                        echo "Skipping destroy"
                     }
                 }
             }
@@ -86,14 +79,8 @@ pipeline {
     }
 
     post {
-        success {
-            echo 'Terraform deployment completed successfully!'
-            // Warning: Since you are using local state, do NOT use cleanWs() here 
-            // or you will lose your .tfstate file.
-        }
-        failure {
-            echo 'Terraform deployment failed!'
-        }
+        success { echo 'Terraform deployment completed successfully!' }
+        failure { echo 'Terraform deployment failed!' }
     }
 }
 
