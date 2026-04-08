@@ -6,6 +6,48 @@ pipeline {
     }
     stages {
         stage('Install & Setup Tools') {
+    steps {
+        sh '''
+        set -euo pipefail
+
+        echo "=== Cleaning previous Terraform install ==="
+        rm -rf terraform* terraform-bin .terraform .terraform.lock.hcl   # ← ADD THIS
+
+        # --- Unzip (if missing) ---
+        if ! command -v unzip &> /dev/null; then
+            echo "unzip not found. Attempting install..."
+            if command -v apt-get &> /dev/null; then
+                apt-get update -qq && apt-get install -y unzip || echo "Warning: Could not install unzip"
+            elif command -v yum &> /dev/null; then
+                yum install -y unzip || echo "Warning: Could not install unzip"
+            else
+                echo "Warning: unzip missing"
+            fi
+        else
+            echo "unzip already available."
+        fi
+
+        # --- Terraform (latest stable) ---
+        echo "Installing Terraform locally..."
+        TF_VERSION="1.14.8"
+        TF_ZIP="terraform_${TF_VERSION}_linux_amd64.zip"
+        curl -s "https://releases.hashicorp.com/terraform/${TF_VERSION}/${TF_ZIP}" -o "${TF_ZIP}"
+
+        if [ -s "${TF_ZIP}" ]; then
+            unzip -q -o "${TF_ZIP}"
+            mkdir -p "${WORKSPACE}/terraform-bin"
+            mv terraform "${WORKSPACE}/terraform-bin/"
+            chmod +x "${WORKSPACE}/terraform-bin/terraform"
+            echo "Terraform ${TF_VERSION} installed to ${WORKSPACE}/terraform-bin"
+        else
+            echo "Error: Terraform download failed."
+            exit 1
+        fi
+        '''
+        sh 'terraform version'
+    }
+}
+/*        stage('Install & Setup Tools') {
             steps {
                 sh '''
                 set -euo pipefail
@@ -46,7 +88,7 @@ pipeline {
                 '''
                 sh 'terraform version'
             }
-        }
+        }*/
 
         stage('Checkout Code') {
             steps {
