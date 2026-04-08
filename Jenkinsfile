@@ -13,7 +13,6 @@ pipeline {
                 echo "=== Cleaning previous Terraform install ==="
                 rm -rf terraform* terraform-bin
 
-                # --- Unzip ---
                 if ! command -v unzip &> /dev/null; then
                     echo "unzip not found. Attempting install..."
                     if command -v apt-get &> /dev/null; then
@@ -27,7 +26,6 @@ pipeline {
                     echo "unzip already available."
                 fi
 
-                # --- Terraform 1.14.8 ONLY (no AWS CLI) ---
                 echo "Installing Terraform 1.14.8 locally..."
                 TF_VERSION="1.14.8"
                 TF_ZIP="terraform_${TF_VERSION}_linux_amd64.zip"
@@ -37,7 +35,7 @@ pipeline {
                     mkdir -p "${WORKSPACE}/terraform-bin"
                     mv terraform "${WORKSPACE}/terraform-bin/"
                     chmod +x "${WORKSPACE}/terraform-bin/terraform"
-                    echo "✅ Terraform 1.14.8 installed to ${WORKSPACE}/terraform-bin/terraform"
+                    echo "✅ Terraform 1.14.8 installed"
                 else
                     echo "❌ Terraform download failed."
                     exit 1
@@ -65,7 +63,7 @@ pipeline {
                     terraform init
                     terraform validate
 
-                    echo "Running terraform fmt -recursive (auto-fixes formatting)..."
+                    echo "Running terraform fmt -recursive..."
                     terraform fmt -recursive
 
                     terraform plan -out=tfplan
@@ -104,7 +102,7 @@ pipeline {
                             echo "=== Running Terraform Destroy ==="
                             terraform destroy -auto-approve
 
-                            echo "✅ Terraform destroy completed. Your S3 bucket is now deleted from AWS."
+                            echo "✅ Terraform destroy completed. The S3 bucket has been deleted."
                             '''
                         }
                     }
