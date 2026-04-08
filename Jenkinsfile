@@ -1,4 +1,4 @@
-pipeline {
+/*pipeline {
     agent any
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
@@ -112,125 +112,7 @@ pipeline {
         success { echo '✅ Terraform deployment completed successfully!' }
         failure { echo '❌ Terraform deployment failed!' }
     }
-}
-/*pipeline {
-    agent any
-
-    environment {
-        TF_VERSION = "1.14.8"
-        TF_BIN_DIR = "${WORKSPACE}/terraform-bin"
-    }
-
-    stages {
-        stage('Install & Setup Tools') {
-            steps {
-                sh '''
-                set -euo pipefail
-
-                echo "=== Cleaning previous Terraform install ==="
-                rm -rf terraform* "${TF_BIN_DIR}"
-
-                # --- Unzip (if missing) ---
-                if ! command -v unzip &> /dev/null; then
-                    echo "unzip not found. Attempting install..."
-                    if command -v apt-get &> /dev/null; then
-                        apt-get update -qq && apt-get install -y unzip || echo "Warning: Could not install unzip"
-                    elif command -v yum &> /dev/null; then
-                        yum install -y unzip || echo "Warning: Could not install unzip"
-                    else
-                        echo "Warning: unzip missing"
-                    fi
-                else
-                    echo "unzip already available."
-                fi
-
-                # --- Terraform (pinned version) ---
-                echo "Installing Terraform ${TF_VERSION} locally..."
-                TF_ZIP="terraform_${TF_VERSION}_linux_amd64.zip"
-                curl -s "https://releases.hashicorp.com/terraform/${TF_VERSION}/${TF_ZIP}" -o "${TF_ZIP}"
-
-                if [ -s "${TF_ZIP}" ]; then
-                    unzip -q -o "${TF_ZIP}"
-                    mkdir -p "${TF_BIN_DIR}"
-                    mv terraform "${TF_BIN_DIR}/"
-                    chmod +x "${TF_BIN_DIR}/terraform"
-                    echo "✅ Terraform ${TF_VERSION} installed to ${TF_BIN_DIR}"
-                else
-                    echo "❌ Terraform download failed."
-                    exit 1
-                fi
-                '''
-            }
-        }
-
-        stage('Checkout Code') {
-            steps {
-                checkout scm
-            }
-        }
-
-        stage('Terraform Operations') {
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                    withEnv(["PATH+TERRAFORM=${TF_BIN_DIR}"]) {
-                        sh '''
-                        set -euo pipefail
-                        terraform version
-                        terraform init
-                        terraform validate
-                        terraform fmt -recursive -check=true   # fail build if formatting is bad
-                        terraform plan -out=tfplan
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Approval') {
-            steps {
-                input message: "Approve Terraform Apply?", ok: "Deploy"
-            }
-        }
-
-        stage('Apply Terraform') {
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                    withEnv(["PATH+TERRAFORM=${TF_BIN_DIR}"]) {
-                        sh 'terraform apply tfplan'
-                    }
-                }
-            }
-        }
-
-        stage('Optional Destroy') {
-            steps {
-                script {
-                    def destroyChoice = input(
-                        message: 'Do you want to run terraform destroy?',
-                        parameters: [choice(name: 'DESTROY', choices: ['no', 'yes'])]
-                    )
-                    if (destroyChoice == 'yes') {
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            withEnv(["PATH+TERRAFORM=${TF_BIN_DIR}"]) {
-                                sh 'terraform destroy -auto-approve'
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    post {
-        success { echo '✅ Terraform deployment completed successfully!' }
-        failure { echo '❌ Terraform deployment failed!' }
-        always {
-            // Optional: clean up plan file
-            sh 'rm -f tfplan'
-        }
-    }
 }*/
-/*
 pipeline {
     agent any
     environment {
@@ -239,48 +121,6 @@ pipeline {
     }
     stages {
         stage('Install & Setup Tools') {
-    steps {
-        sh '''
-        set -euo pipefail
-
-        echo "=== Cleaning previous Terraform install ==="
-        rm -rf terraform* terraform-bin .terraform .terraform.lock.hcl   # ← ADD THIS
-
-        # --- Unzip (if missing) ---
-        if ! command -v unzip &> /dev/null; then
-            echo "unzip not found. Attempting install..."
-            if command -v apt-get &> /dev/null; then
-                apt-get update -qq && apt-get install -y unzip || echo "Warning: Could not install unzip"
-            elif command -v yum &> /dev/null; then
-                yum install -y unzip || echo "Warning: Could not install unzip"
-            else
-                echo "Warning: unzip missing"
-            fi
-        else
-            echo "unzip already available."
-        fi
-
-        # --- Terraform (latest stable) ---
-        echo "Installing Terraform locally..."
-        TF_VERSION="1.14.8"
-        TF_ZIP="terraform_${TF_VERSION}_linux_amd64.zip"
-        curl -s "https://releases.hashicorp.com/terraform/${TF_VERSION}/${TF_ZIP}" -o "${TF_ZIP}"
-
-        if [ -s "${TF_ZIP}" ]; then
-            unzip -q -o "${TF_ZIP}"
-            mkdir -p "${WORKSPACE}/terraform-bin"
-            mv terraform "${WORKSPACE}/terraform-bin/"
-            chmod +x "${WORKSPACE}/terraform-bin/terraform"
-            echo "Terraform ${TF_VERSION} installed to ${WORKSPACE}/terraform-bin"
-        else
-            echo "Error: Terraform download failed."
-            exit 1
-        fi
-        '''
-        sh 'terraform version'
-    }
-}*/
-/*        stage('Install & Setup Tools') {
             steps {
                 sh '''
                 set -euo pipefail
@@ -333,10 +173,19 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                     sh '''
+                    set -euo pipefail
+
+                    echo "=== Terraform Operations ==="
+                    terraform version
+
                     terraform init
                     terraform validate
+
+                    echo "Running terraform fmt -recursive (auto-fixes formatting)..."
                     terraform fmt -recursive
+
                     terraform plan -out=tfplan
+                    echo "Terraform plan completed successfully."
                     '''
                 }
             }
@@ -365,7 +214,29 @@ pipeline {
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
+                            sh '''
+                            set -euo pipefail
+
+                            echo "=== Running Terraform Destroy ==="
+                            terraform destroy -auto-approve
+
+                            echo "=== Running Aggressive Cleanup for ALL jenkins-bucket-andre-class7* buckets (fixes orphaned buckets from previous runs) ==="
+                            # This catches any buckets created in previous pipeline runs where tfstate was lost (different workspace each day)
+                            aws s3 ls | awk '{print $3}' | grep '^jenkins-bucket-andre-class7' | while read -r bucket; do
+                                echo "→ Cleaning up orphaned bucket: $bucket"
+                                aws s3 rm s3://$bucket --recursive --force || true
+                                aws s3api delete-bucket --bucket $bucket || true
+                            done
+
+                            echo "=== Verification: Checking for any remaining test buckets ==="
+                            REMAINING=$(aws s3 ls | awk '{print $3}' | grep '^jenkins-bucket-andre-class7' | wc -l)
+                            if [ "$REMAINING" -eq 0 ]; then
+                                echo "✅ All test S3 buckets successfully deleted from AWS!"
+                            else
+                                echo "⚠️  Some buckets still remain (see list above). Manual check required in AWS console."
+                                exit 1
+                            fi
+                            '''
                         }
                     }
                 }
@@ -373,7 +244,7 @@ pipeline {
         }
     }
     post {
-        success { echo 'Terraform deployment completed successfully!' }
-        failure { echo 'Terraform deployment failed!' }
+        success { echo '✅ Terraform deployment completed successfully!' }
+        failure { echo '❌ Terraform deployment failed!' }
     }
-}*/
+}
