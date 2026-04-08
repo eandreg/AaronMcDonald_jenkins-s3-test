@@ -27,7 +27,7 @@ pipeline {
                 fi
                 '''
                 sh 'terraform version'
-                # Check if we use the local one we just built or the system one
+                // Check if we use the local one we just built or the system one
                 sh 'if [ -f "./aws-bin/aws" ]; then ./aws-bin/aws --version; else aws --version; fi'
             }
         }
