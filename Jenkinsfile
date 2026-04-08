@@ -11,9 +11,9 @@ pipeline {
                 set -euo pipefail
 
                 echo "=== Cleaning previous Terraform & AWS CLI install ==="
-                rm -rf terraform* terraform-bin awscliv2.zip aws aws-cli* 
+                rm -rf terraform* terraform-bin awscliv2.zip aws aws-cli aws-cli-bin
 
-                # --- Unzip (already present) ---
+                # --- Unzip ---
                 if ! command -v unzip &> /dev/null; then
                     echo "unzip not found. Attempting install..."
                     if command -v apt-get &> /dev/null; then
@@ -37,23 +37,24 @@ pipeline {
                     mkdir -p "${WORKSPACE}/terraform-bin"
                     mv terraform "${WORKSPACE}/terraform-bin/"
                     chmod +x "${WORKSPACE}/terraform-bin/terraform"
-                    echo "✅ Terraform ${TF_VERSION} installed"
+                    echo "✅ Terraform installed to ${WORKSPACE}/terraform-bin/terraform"
                 else
                     echo "❌ Terraform download failed."
                     exit 1
                 fi
 
-                # --- AWS CLI v2 (FIXED: separate install dir + bin dir) ---
+                # --- AWS CLI v2 (FINAL FIXED INSTALL) ---
                 echo "Installing AWS CLI v2 locally..."
                 AWS_ZIP="awscliv2.zip"
                 curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "${AWS_ZIP}"
                 if [ -s "${AWS_ZIP}" ]; then
                     unzip -q -o "${AWS_ZIP}"
                     mkdir -p "${WORKSPACE}/aws-cli-bin"
-                    # Corrected install: separate install dir and binary location
-                    ./aws/install -i "${WORKSPACE}/aws-cli" -b "${WORKSPACE}/aws-cli-bin/aws" --update
+                    # CORRECTED: -b points to the DIRECTORY (not the file)
+                    ./aws/install -i "${WORKSPACE}/aws-cli" -b "${WORKSPACE}/aws-cli-bin" --update
                     chmod +x "${WORKSPACE}/aws-cli-bin/aws"
                     echo "✅ AWS CLI v2 installed to ${WORKSPACE}/aws-cli-bin/aws"
+                    ls -la "${WORKSPACE}/aws-cli-bin/aws" || true
                 else
                     echo "❌ AWS CLI download failed."
                     exit 1
