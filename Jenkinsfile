@@ -1,4 +1,4 @@
-pipeline {
+/*pipeline {
     agent any
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
@@ -46,8 +46,8 @@ pipeline {
         '''
         sh 'terraform version'
     }
-}
-/*        stage('Install & Setup Tools') {
+}*/
+        stage('Install & Setup Tools') {
             steps {
                 sh '''
                 set -euo pipefail
@@ -88,7 +88,7 @@ pipeline {
                 '''
                 sh 'terraform version'
             }
-        }*/
+        }
 
         stage('Checkout Code') {
             steps {
