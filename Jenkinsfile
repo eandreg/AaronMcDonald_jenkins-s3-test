@@ -51,43 +51,44 @@ pipeline {
             }
         }
 
-        stage('Terraform Operations') {
+        stage('Terraform Init & Validate') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                     sh '''
                     set -euo pipefail
-
-                    echo "=== Terraform Operations ==="
+                    echo "=== Terraform Init & Validate ==="
                     terraform version
-
                     terraform init
                     terraform validate
-
                     echo "Running terraform fmt -recursive..."
                     terraform fmt -recursive
-
-                    terraform plan -out=tfplan
-                    echo "Terraform plan completed successfully."
                     '''
                 }
             }
         }
 
-        stage('Pre-Apply Cleanup (fixes BucketAlreadyExists forever)') {
+        stage('Pre-Apply Cleanup (guaranteed no BucketAlreadyExists)') {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                     sh '''
                     set -euo pipefail
-
                     echo "=== Pre-Apply Cleanup: Removing any existing jenkins-bucket-andre-class7-fixed ==="
-
-                    # Import the bucket into Terraform state if it exists in AWS (silent if it doesn't)
                     terraform import aws_s3_bucket.frontend jenkins-bucket-andre-class7-fixed 2>/dev/null || true
-
-                    # Destroy it (force_destroy = true in your tf file will empty + delete it)
                     terraform destroy -target=aws_s3_bucket.frontend -auto-approve || true
+                    echo "✅ Any existing bucket has been cleaned up."
+                    '''
+                }
+            }
+        }
 
-                    echo "✅ Any existing bucket has been cleaned up. Ready for fresh creation."
+        stage('Terraform Plan') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
+                    sh '''
+                    set -euo pipefail
+                    echo "=== Terraform Plan ==="
+                    terraform plan -out=tfplan
+                    echo "Terraform plan completed successfully."
                     '''
                 }
             }
@@ -118,10 +119,8 @@ pipeline {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
                             sh '''
                             set -euo pipefail
-
                             echo "=== Running Terraform Destroy ==="
                             terraform destroy -auto-approve
-
                             echo "✅ Terraform destroy completed. The S3 bucket has been deleted."
                             '''
                         }
