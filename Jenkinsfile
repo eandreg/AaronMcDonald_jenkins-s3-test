@@ -142,10 +142,11 @@ pipeline {
     }
 
     environment {
-        AWS_DEFAULT_REGION   = 'us-east-1'
-        PATH                 = "${env.WORKSPACE}/terraform-bin:${env.PATH}"
-        TF_VERSION           = "1.9.5"
-        CHECKPOINT_DISABLE   = "1"  // ✅ FIX: Suppresses the spurious "latest version is 1.14.8" warning from HashiCorp's checkpoint service
+        AWS_DEFAULT_REGION = 'us-east-1'
+        PATH               = "${env.WORKSPACE}/terraform-bin:${env.PATH}"
+        TF_VERSION         = "1.9.5"
+        CHECKPOINT_DISABLE = "1"          // Suppresses the spurious version warning from HashiCorp's checkpoint service
+        BUCKET_NAME        = "jenkins-bucket-andre-class7-fixed"  // ✅ Single source of truth for the bucket name
     }
 
     stages {
@@ -211,16 +212,47 @@ pipeline {
                     echo "=== Terraform Init & Validate ==="
                     terraform version
 
-                    # ✅ FIX: Use -upgrade to force a fresh provider download on every run.
-                    # The previous failure ("Plugin did not respond") was caused by the AWS provider
-                    # being loaded from a stale/corrupt cache. -upgrade ensures a clean provider
-                    # binary is always used, eliminating gRPC crash and architecture mismatch issues.
+                    # -upgrade forces a fresh provider download, preventing stale/corrupt
+                    # cache from causing the "Plugin did not respond" gRPC crash
                     terraform init -upgrade
 
                     terraform validate
 
                     echo "Running terraform fmt -check -recursive..."
                     terraform fmt -check -recursive
+                    '''
+                }
+            }
+        }
+
+        stage('Import Existing Resources') {
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
+                    sh '''
+                    set -euo pipefail
+                    echo "=== Checking for pre-existing S3 bucket ==="
+
+                    # ✅ FIX: BucketAlreadyExists error at apply was caused by the bucket existing
+                    # in AWS but not in Terraform state, so Terraform tried to create it and AWS rejected it.
+                    #
+                    # This stage safely resolves that by:
+                    #   1. Checking if the bucket exists in AWS (via head-bucket)
+                    #   2. If it does AND is not already in state, importing it so Terraform manages it
+                    #   3. If it doesn't exist, doing nothing — Terraform will create it at apply
+                    #
+                    # This is idempotent and non-destructive. It never deletes anything.
+
+                    ALREADY_IN_STATE=$(terraform state list aws_s3_bucket.frontend 2>/dev/null || true)
+
+                    if [ -n "$ALREADY_IN_STATE" ]; then
+                        echo "✅ Bucket already in Terraform state. No import needed."
+                    elif aws s3api head-bucket --bucket "${BUCKET_NAME}" 2>/dev/null; then
+                        echo "⚠️  Bucket exists in AWS but not in state. Importing..."
+                        terraform import aws_s3_bucket.frontend "${BUCKET_NAME}"
+                        echo "✅ Bucket successfully imported into Terraform state."
+                    else
+                        echo "✅ Bucket does not exist in AWS. Terraform will create it at apply."
+                    fi
                     '''
                 }
             }
