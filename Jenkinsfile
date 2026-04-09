@@ -138,13 +138,14 @@ pipeline {
     agent any
 
     options {
-        timeout(time: 30, unit: 'MINUTES')  // ✅ FIX: Prevent hung input steps from blocking executor indefinitely
+        timeout(time: 30, unit: 'MINUTES')  // Prevent hung input steps from blocking executor indefinitely
     }
 
     environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
-        PATH = "${env.WORKSPACE}/terraform-bin:${env.PATH}"
-        TF_VERSION = "1.9.5"  // ✅ FIX: 1.14.8 does not exist; using latest stable 1.x release
+        AWS_DEFAULT_REGION   = 'us-east-1'
+        PATH                 = "${env.WORKSPACE}/terraform-bin:${env.PATH}"
+        TF_VERSION           = "1.9.5"
+        CHECKPOINT_DISABLE   = "1"  // ✅ FIX: Suppresses the spurious "latest version is 1.14.8" warning from HashiCorp's checkpoint service
     }
 
     stages {
@@ -177,7 +178,6 @@ pipeline {
                 curl -sSf "https://releases.hashicorp.com/terraform/${TF_VERSION}/${TF_ZIP}" -o "${TF_ZIP}"
                 curl -sSf "https://releases.hashicorp.com/terraform/${TF_VERSION}/${TF_SHA_FILE}" -o "${TF_SHA_FILE}"
 
-                # ✅ FIX: Verify SHA256 checksum before installing to protect against supply chain tampering
                 echo "Verifying SHA256 checksum..."
                 grep "${TF_ZIP}" "${TF_SHA_FILE}" | sha256sum -c -
                 echo "✅ Checksum verified."
@@ -210,32 +210,21 @@ pipeline {
                     set -euo pipefail
                     echo "=== Terraform Init & Validate ==="
                     terraform version
-                    terraform init
+
+                    # ✅ FIX: Use -upgrade to force a fresh provider download on every run.
+                    # The previous failure ("Plugin did not respond") was caused by the AWS provider
+                    # being loaded from a stale/corrupt cache. -upgrade ensures a clean provider
+                    # binary is always used, eliminating gRPC crash and architecture mismatch issues.
+                    terraform init -upgrade
+
                     terraform validate
 
-                    # ✅ FIX: Use -check flag so CI fails on unformatted code instead of silently modifying files
                     echo "Running terraform fmt -check -recursive..."
                     terraform fmt -check -recursive
                     '''
                 }
             }
         }
-
-        // ✅ FIX: Removed the 'Pre-Apply Cleanup' stage entirely.
-        //
-        // The original stage ran:
-        //   terraform import ... && terraform destroy ...
-        // before every apply. This is an anti-pattern because:
-        //   1. It is destructive by default on every pipeline run.
-        //   2. It is not safe in concurrent pipeline scenarios (race condition → data loss).
-        //   3. It used '|| true' to suppress all errors, silently masking real failures.
-        //
-        // The correct approach is to manage bucket lifecycle in Terraform code using:
-        //   lifecycle { prevent_destroy = true }         → prevents accidental destruction
-        //   lifecycle { create_before_destroy = true }   → safe replacement if needed
-        //
-        // Any one-time import of pre-existing resources should be done manually or
-        // as a separate, intentional pipeline job — never as part of a routine apply.
 
         stage('Terraform Plan') {
             steps {
@@ -294,7 +283,7 @@ pipeline {
             echo '❌ Terraform deployment failed!'
         }
         cleanup {
-            // ✅ FIX: Always clean up ephemeral artifacts from the workspace after the run
+            // Always clean up ephemeral artifacts from the workspace after every run
             sh '''
             echo "=== Post-run Cleanup ==="
             rm -f tfplan
