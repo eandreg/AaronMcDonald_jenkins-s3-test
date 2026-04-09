@@ -1,4 +1,4 @@
-/*pipeline {
+pipeline {
     agent any
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
@@ -133,7 +133,8 @@
         success { echo '✅ Terraform deployment completed successfully!' }
         failure { echo '❌ Terraform deployment failed!' }
     }
-}*/
+}
+/*
 pipeline {
     agent any
 
@@ -325,4 +326,4 @@ pipeline {
             '''
         }
     }
-}
+}*/
