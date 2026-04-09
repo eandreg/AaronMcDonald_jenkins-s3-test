@@ -1,4 +1,4 @@
-/*pipeline {
+pipeline {
     agent any
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
@@ -132,54 +132,5 @@
     post {
         success { echo '✅ Terraform deployment completed successfully!' }
         failure { echo '❌ Terraform deployment failed!' }
-    }
-}*/
-pipeline {
-    agent any
-    environment {
-        AWS_DEFAULT_REGION = 'us-east-1'
-        PATH = "${env.WORKSPACE}/terraform-bin:${env.PATH}"
-    }
-    stages {
-        stage('Setup & Plan') {
-            steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                    sh '''
-                    set -euo pipefail
-                    echo "=== Setup, Init, and Plan ==="
-                    if [ ! -f "terraform-bin/terraform" ]; then
-                        TF_VERSION="1.14.8"
-                        curl -s "https://hashicorp.com{TF_VERSION}/terraform_${TF_VERSION}_linux_amd64.zip" -o tf.zip
-                        unzip -o tf.zip
-                        mkdir -p terraform-bin && mv terraform terraform-bin/ && chmod +x terraform-bin/terraform
-                        rm tf.zip
-                    fi
-                    terraform init
-                    terraform validate
-                    terraform plan -out=tfplan
-                    '''
-                }
-            }
-        }
-        stage('Apply') {
-            steps {
-                input message: "Approve Apply?", ok: "Deploy"
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                    sh 'terraform apply tfplan'
-                }
-            }
-        }
-        stage('Optional Destroy') {
-            steps {
-                script {
-                    def destroyChoice = input(message: 'Destroy infra?', parameters: [choice(name: 'DESTROY', choices: ['no', 'yes'])])
-                    if (destroyChoice == 'yes') {
-                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
-                        }
-                    }
-                }
-            }
-        }
     }
 }
