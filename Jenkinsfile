@@ -33,15 +33,16 @@ pipeline {
                     sh '''
                     set -euo pipefail
                     
-                    echo "=== Step 1: Formatting and Validation ==="
-                    terraform fmt
-                    terraform validate
+                    echo "=== Step 1: Hard Resetting Workspace ==="
+                    # This removes old backend metadata that is confusing Terraform
+                    rm -rf .terraform .terraform.lock.hcl
                     
                     echo "=== Step 2: Initializing Backend ==="
-                    # -reconfigure handles the switch between remote and local state
+                    # -reconfigure tells Terraform to use the local state since S3 is commented out
                     terraform init -reconfigure
                     
-                    echo "=== Step 3: Generating Plan ==="
+                    echo "=== Step 3: Validate and Plan ==="
+                    terraform validate
                     terraform plan -out=tfplan
                     '''
                 }
@@ -76,6 +77,6 @@ pipeline {
     }
     post {
         success { echo '✅ Pipeline finished successfully!' }
-        failure { echo '❌ Pipeline failed. Check the logs above for Terraform errors.' }
+        failure { echo '❌ Pipeline failed. Check the logs above.' }
     }
 }
