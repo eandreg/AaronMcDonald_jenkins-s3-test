@@ -34,7 +34,7 @@ pipeline {
                     set -euo pipefail
                     
                     echo "=== Step 1: Formatting and Validation ==="
-                    terraform fmt -recursive
+                    terraform fmt
                     terraform validate
                     
                     echo "=== Step 2: Initializing Backend ==="
