@@ -33,17 +33,17 @@ pipeline {
                     sh '''
                     set -euo pipefail
                     
-                    echo "=== Step 1: Hard Resetting Workspace ==="
-                    # This removes old backend metadata that is confusing Terraform
-                    rm -rf .terraform .terraform.lock.hcl
+                    echo "=== Step 1: Cleaning Backend Metadata ==="
+                    # We only remove the directory, keeping the lock file for plugin stability
+                    rm -rf .terraform 
                     
                     echo "=== Step 2: Initializing Backend ==="
-                    # -reconfigure tells Terraform to use the local state since S3 is commented out
-                    terraform init -reconfigure
+                    # -input=false prevents the process from hanging on prompts
+                    terraform init -reconfigure -input=false
                     
-                    echo "=== Step 3: Validate and Plan ==="
-                    terraform validate
-                    terraform plan -out=tfplan
+                    echo "=== Step 3: Generating Plan ==="
+                    # 'plan' includes an implicit validation check
+                    terraform plan -out=tfplan -input=false
                     '''
                 }
             }
@@ -54,7 +54,7 @@ pipeline {
                 input message: "Approve Terraform Apply?", ok: "Deploy"
                 
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                    sh 'terraform apply tfplan'
+                    sh 'terraform apply -input=false tfplan'
                 }
             }
         }
@@ -68,7 +68,7 @@ pipeline {
                     )
                     if (destroyChoice == 'yes') {
                         withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'jenkinsTest']]) {
-                            sh 'terraform destroy -auto-approve'
+                            sh 'terraform destroy -auto-approve -input=false'
                         }
                     }
                 }
@@ -77,6 +77,6 @@ pipeline {
     }
     post {
         success { echo '✅ Pipeline finished successfully!' }
-        failure { echo '❌ Pipeline failed. Check the logs above.' }
+        failure { echo '❌ Pipeline failed. This is often due to plugin timeouts or AWS credentials.' }
     }
 }
