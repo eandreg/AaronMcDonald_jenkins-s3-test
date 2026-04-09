@@ -30,11 +30,11 @@ terraform {
   backend "s3" {
     bucket       = "my-terraform-state-bucket"
     key          = "state/jenkins-project.tfstate"
-    region       = "us-east-1"
+    region       = "us-west-2"
     # use_lockfile = true # Requires Terraform 1.10+ to replace DynamoDB
   }
 }
 
 provider "aws" {
-  region = "us-east-1"
+  region = "us-west-2"
 }
